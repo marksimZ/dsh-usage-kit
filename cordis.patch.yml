@@ -1,0 +1,40 @@
+# DSH loader overlay for the usage kit.
+#
+# Apply it as a launcher layer:
+#   dsh web --patch D:/vibecoding/dshplugins/dsh-usage-kit/cordis.patch.yml
+#
+# ...or append this one row to your profile's own patch layer
+# (`$DSH_HOME/profiles/<profile>/cordis.patch.yml`, the Desktop client uses
+# `desktop`), which reloads live. `node scripts/install.mjs` writes it for you.
+#
+# The row names the Host half by absolute file URL, so the plugin needs no
+# install step: the loader's own resolver locates `src/index.ts`, and the
+# nearest `package.json` is what lets the client-module scanner see the
+# `dsh.client` declaration and serve `src/client.js` as the browser bundle.
+#
+# Each widget can be switched off here without touching the other one.
+
+- insert:
+    - id: usage-kit
+      name: 'file:///D:/vibecoding/dshplugins/dsh-usage-kit/src/index.ts'
+      config:
+        widgets:
+          # Advisory row above the composer; appears only when there is advice.
+          coach: true
+          # Per-turn receipt under each completed turn.
+          receipt: true
+        coach:
+          # Occupancy ratio that triggers the compaction advice.
+          occupancyWarn: 0.8
+          # Projected next-request ratio that triggers the compaction advice.
+          projectedWarn: 0.9
+          # Cache-hit ratio below which the "repeated input" hint appears.
+          cacheHitFloor: 0.8
+          # Minimum prompt tokens before the cache hint is worth showing.
+          minPromptTokens: 20000
+        # CNY per USD for the receipt's display amount.
+        cnyPerUsd: 7.2
+        # UTC dates billed at off-peak all day (Chinese public holidays).
+        holidays: []
+        # Completed turns kept per session.
+        turnsKept: 300
