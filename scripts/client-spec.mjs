@@ -50,7 +50,15 @@ const module = await load(undefined)
 check('module name', module.name, 'dsh-usage-kit')
 check('injects slots', module.inject.includes('slots'), true)
 assert('test seam present', module.__internals !== undefined)
-const { coachAdvice, receiptView, formatTokens, formatDuration, formatMoney, percentText, cacheHitRatio, promptTokens, runtimeConfig } = module.__internals
+const { coachAdvice, receiptView, formatTokens, formatDuration, formatMoney, percentText, cacheHitRatio, promptTokens, turnNumberOf, runtimeConfig } = module.__internals
+
+// --- transcript turn identity ------------------------------------------
+check('turn number from a number', turnNumberOf(7), 7)
+check('turn number from a TurnLocation', turnNumberOf({ kind: 'turn', turn: 7 }), 7)
+check('turn number through the Turn object', turnNumberOf({ kind: 'turn', turn: { turn: 7 } }), 7)
+check('turn number from an id', turnNumberOf({ id: 9 }), 9)
+assert('unknown turn shape is NaN', Number.isNaN(turnNumberOf({})))
+assert('null turn is NaN', Number.isNaN(turnNumberOf(null)))
 
 // --- defaults -----------------------------------------------------------
 check('default widgets', runtimeConfig.widgets, { coach: true, receipt: true })
