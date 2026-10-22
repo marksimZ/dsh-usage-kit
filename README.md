@@ -102,10 +102,13 @@ Monday–Friday `01:00–04:00` and `06:00–10:00` UTC, excluding `holidays`.
 
 ```text
 Host half (src/index.ts)
-  ctx.on('session/event')                        → settle each turn: steps, usage delta, duration, model
-  ctx.sessionProjections.stateOf('tokenUsage')   → the cumulative baseline per turn
+  ctx.on('session/event')
+    request/context      → the routed model for the turn
+    turn/start           → open a turn (steps, running usage total)
+    assistant/message    → add its billed usage sample (retries add another)
+    turn/end             → price the turn and publish a receipt
   src/pricing.js                                 → price catalog, peak calendar, billing math (pure)
-  ├─ GET /dsh-usage-kit/receipts?session=<id>    → receipts keyed by the turn's closing seq
+  └─ GET /dsh-usage-kit/receipts?session=<id>    → { byTurn, bySeq } receipts
   └─ globalThis.__DSH_USAGE_KIT_CONFIG__         → widget switches for the browser half
 
 Browser half (src/client.js)
@@ -114,8 +117,14 @@ Browser half (src/client.js)
 ```
 
 **Why a Host half at all?** Per-turn usage cannot be derived from the cumulative `tokenUsage`
-projection in the browser, so the Host folds each turn's delta, prices it and publishes it. The
-coach needs no Host data and runs entirely on the shipped projections.
+projection in the browser, so the Host folds each turn from the provider-reported
+`assistant/message.usage` samples, prices it and publishes it. The coach needs no Host data and
+runs entirely on the shipped projections.
+
+**Why two lookup keys?** The transcript entry receives the closing **node** seq, which is not the
+`turn/end` event seq, so a seq-only index misses. Receipts are therefore published under the turn
+number (primary) and the end seq (fallback), and the browser resolves the turn id defensively from
+the `TurnLocation` it receives.
 
 **Why `conversation.chat.turnTail` and `conversation.input.dock`?** They are the two document
 seats that already receive `useProjection` and the input/chat hooks; registering a fresh `id`
@@ -125,16 +134,16 @@ adds an entry beside the shipped ones instead of replacing them (`replaceRisk: n
 
 ```sh
 npm test          # pricing spec + client spec + bundle smoke + theme tokens + visual tokens
-npm run test:host # folds two turns on a mock context and drives the real receipts route
+npm run test:host # folds three turns on a mock context and drives the real receipts route
 npm run verify    # read-only probe of a running GUI
 ```
 
 | Script | What it pins |
 |---|---|
 | `scripts/pricing-spec.mjs` | the official price table, the peak/off-peak calendar, billing math, usage deltas |
-| `scripts/client-spec.mjs` | coach advice rules (occupancy / projected / cache), receipt summary and detail, formatters, injected widget switches |
+| `scripts/client-spec.mjs` | coach advice rules (occupancy / projected / cache), transcript turn identity, receipt summary and detail, formatters, injected switches |
 | `scripts/client-smoke.mjs` | bundle contract, one stylesheet, two seat registrations, per-widget switches |
-| `scripts/host-smoke.mjs` | turn folding keyed by closing seq, usage delta against the turn baseline, cost, injections, route edges |
+| `scripts/host-smoke.mjs` | usage accumulation from assistant samples (retries add up), model from request/context, byTurn/bySeq keys, cost, injections, route edges |
 | `scripts/theme-tokens.mjs` | every `var(--dsw-*)` is declared by the shipped theme |
 | `scripts/visual-tokens.mjs` | no raw colours, radii/type only from the theme scale, no infinite animation |
 | `scripts/verify-deployed.mjs` | the running GUI serves the bundle and the receipts route |
