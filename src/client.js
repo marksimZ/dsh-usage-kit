@@ -283,19 +283,41 @@ window.__ModuleLoader__.load({
       }
     }
 
+    /**
+     * The numeric turn id behind the transcript's `turn` owner prop.
+     *
+     * The transcript hands the entry a `TurnLocation` (`{ kind, turn }`) whose
+     * `turn` is the timeline's Turn object, so the number can sit one or two
+     * levels down depending on the build. Returns NaN when nothing numeric is
+     * found, and the store then falls back to the closing seq.
+     */
+    function turnNumberOf(turn) {
+      if (typeof turn === 'number' && Number.isFinite(turn)) return turn
+      if (turn === null || typeof turn !== 'object') return Number.NaN
+      const direct = turn.turn
+      if (typeof direct === 'number' && Number.isFinite(direct)) return direct
+      if (direct !== null && typeof direct === 'object' && typeof direct.turn === 'number') return direct.turn
+      if (typeof turn.id === 'number' && Number.isFinite(turn.id)) return turn.id
+      return Number.NaN
+    }
+
     /* ------------------------------------------------------ receipt store */
 
     /** One fetch per session, shared by every receipt of that session. */
     const receiptStore = {
       sessions: new Map(),
-      read(sessionId, seq) {
+      read(sessionId, seq, turnNumber) {
         const entry = this.sessions.get(sessionId)
         if (entry === undefined) return null
-        return entry.data[String(seq)] ?? null
+        if (Number.isFinite(turnNumber)) {
+          const byTurn = entry.data.byTurn?.[String(turnNumber)]
+          if (byTurn !== undefined) return byTurn
+        }
+        return entry.data.bySeq?.[String(seq)] ?? null
       },
       async ensure(sessionId) {
         const existing = this.sessions.get(sessionId)
-        const entry = existing ?? { data: {}, at: 0, inflight: null }
+        const entry = existing ?? { data: { byTurn: {}, bySeq: {} }, at: 0, inflight: null }
         if (existing === undefined) this.sessions.set(sessionId, entry)
         if (entry.at > 0 && Date.now() - entry.at < RECEIPT_TTL_MS) return
         if (entry.inflight !== null) return entry.inflight
@@ -306,8 +328,8 @@ window.__ModuleLoader__.load({
             })
             if (!response.ok) return
             const body = await response.json()
-            if (body !== null && typeof body === 'object' && body.receipts !== null && typeof body.receipts === 'object') {
-              entry.data = body.receipts
+            if (body !== null && typeof body === 'object' && typeof body.byTurn === 'object' && typeof body.bySeq === 'object') {
+              entry.data = { byTurn: body.byTurn, bySeq: body.bySeq }
               entry.at = Date.now()
             }
           } catch {
@@ -366,16 +388,17 @@ window.__ModuleLoader__.load({
     function TurnReceipt(props) {
       const sessionId = props.sessionId
       const seq = props.seq
-      const [receipt, setReceipt] = React.useState(() => receiptStore.read(sessionId, seq))
+      const turnNumber = turnNumberOf(props.turn)
+      const [receipt, setReceipt] = React.useState(() => receiptStore.read(sessionId, seq, turnNumber))
       const [open, setOpen] = React.useState(false)
 
       React.useEffect(() => {
         let alive = true
         void receiptStore.ensure(sessionId).then(() => {
-          if (alive) setReceipt(receiptStore.read(sessionId, seq))
+          if (alive) setReceipt(receiptStore.read(sessionId, seq, turnNumber))
         })
         return () => { alive = false }
-      }, [sessionId, seq])
+      }, [sessionId, seq, turnNumber])
 
       if (receipt === null || receipt === undefined) return null
       const view = receiptView(receipt)
@@ -444,6 +467,7 @@ window.__ModuleLoader__.load({
             percentText,
             cacheHitRatio,
             promptTokens,
+            turnNumberOf,
             receiptStore,
             STYLE_ID,
             runtimeConfig,
