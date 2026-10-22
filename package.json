@@ -1,6 +1,6 @@
 {
   "name": "dsh-usage-kit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "DSH plugin: an actionable context coach above the composer and a per-turn usage receipt under every completed turn.",
   "license": "MIT",
